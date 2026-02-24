@@ -47,16 +47,29 @@ async function handleLogin(e) {
 
   try {
     console.log("🔍 Testing connection to Supabase...");
+    
+    // TEST SIMPLE - voir si la table existe
+    const { data: testData, error: testError } = await window.supabase
+      .from('users')
+      .select('count', { count: 'exact', head: true });
+    
+    console.log("Test connexion:", { testData, testError });
+
+    if (testError) {
+      console.error("❌ Erreur de connexion:", testError);
+      errorDiv.textContent = "Erreur de connexion à la base de données";
+      return;
+    }
 
     // RECHERCHE DE L'UTILISATEUR
     console.log("🔍 Searching for user:", full_name);
+    
     const { data, error } = await window.supabase
       .from('users')
       .select('*')
       .eq('full_name', full_name);
 
-    console.log("User Query Data:", data);
-    console.log("User Query Error:", error);
+    console.log("Résultats bruts:", { data, error });
 
     if (error) {
       console.error("❌ Query error:", error);
@@ -220,3 +233,4 @@ function showFeedback(element, message, type) {
     }, 3000);
   }
 }
+
