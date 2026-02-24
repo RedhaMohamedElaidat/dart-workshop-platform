@@ -1,75 +1,132 @@
 // ============================================
-// ADMIN.JS - Admin Panel avec Supabase
+// ADMIN-SUPABASE.JS - Panneau d'administration
 // ============================================
 
 let allSubmissions = [];
-let filteredSubmissions = [];
+let allUsers = [];
 
-// Initialiser
+// Initialisation
 document.addEventListener('DOMContentLoaded', () => {
+  console.log("🚀 Admin panel initializing...");
+  initializeAdmin();
+});
+
+function initializeAdmin() {
+  // Event listeners
   document.getElementById('backBtn').addEventListener('click', () => {
     window.location.href = '/';
   });
-
+  
   document.getElementById('exportBtn').addEventListener('click', exportToCSV);
-
-  loadAllSubmissions();
-});
+  
+  // Charger les données
+  loadAllData();
+}
 
 // ============================================
-// CHARGER TOUTES LES SOUMISSIONS
+// CHARGER TOUTES LES DONNÉES
 // ============================================
 
-async function loadAllSubmissions() {
+async function loadAllData() {
   try {
-    const { data, error } = await supabase
+    // Charger les utilisateurs
+    await loadUsers();
+    
+    // Charger les soumissions
+    await loadSubmissions();
+    
+  } catch (error) {
+    console.error('❌ Error loading data:', error);
+    showError('Failed to load data. Please refresh the page.');
+  }
+}
+
+async function loadUsers() {
+  try {
+    const { data, error } = await window.supabase
+      .from('users')
+      .select('*')
+      .order('full_name');
+
+    if (error) throw error;
+
+    allUsers = data || [];
+    
+    // Remplir le filtre des étudiants
+    const filterStudent = document.getElementById('filterStudent');
+    allUsers.forEach(user => {
+      const option = document.createElement('option');
+      option.value = user.full_name;
+      option.textContent = user.full_name;
+      filterStudent.appendChild(option);
+    });
+    
+    console.log(`✅ Loaded ${allUsers.length} users`);
+    
+  } catch (error) {
+    console.error('❌ Error loading users:', error);
+  }
+}
+
+async function loadSubmissions() {
+  try {
+    const { data, error } = await window.supabase
       .from('submissions')
       .select('*')
-      .order('full_name', { ascending: true })
-      .order('activity_number', { ascending: true });
+      .order('created_at', { ascending: false });
 
-    if (error) {
-      document.getElementById('submissionsTable').innerHTML = `
-        <tr>
-          <td colspan="5" class="text-center error">
-            ${error.message}
-          </td>
-        </tr>
-      `;
-      return;
-    }
+    if (error) throw error;
 
     allSubmissions = data || [];
-    filteredSubmissions = [...allSubmissions];
-    populateFilters();
-    displaySubmissions();
-
-  } catch (err) {
-    console.error('Load error:', err);
-    document.getElementById('submissionsTable').innerHTML = `
-      <tr>
-        <td colspan="5" class="text-center error">
-          Connection error
-        </td>
-      </tr>
-    `;
+    console.log(`✅ Loaded ${allSubmissions.length} submissions`);
+    
+    // Afficher les soumissions
+    displaySubmissions(allSubmissions);
+    
+  } catch (error) {
+    console.error('❌ Error loading submissions:', error);
+    showError('Failed to load submissions.');
   }
 }
 
 // ============================================
-// REMPLIR LES FILTRES
+// AFFICHER LES SOUMISSIONS
 // ============================================
 
-function populateFilters() {
-  const studentFilter = document.getElementById('filterStudent');
-  const uniqueStudents = [...new Set(allSubmissions.map(s => s.full_name))];
+function displaySubmissions(submissions) {
+  const tbody = document.getElementById('submissionsTable');
+  
+  if (!submissions || submissions.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" class="text-center">No submissions found</td>
+      </tr>
+    `;
+    return;
+  }
 
-  uniqueStudents.forEach(student => {
-    const option = document.createElement('option');
-    option.value = student;
-    option.textContent = student;
-    studentFilter.appendChild(option);
+  let html = '';
+  
+  submissions.forEach(sub => {
+    const date = new Date(sub.created_at).toLocaleString('fr-FR');
+    const codePreview = sub.code_text.substring(0, 100) + (sub.code_text.length > 100 ? '...' : '');
+    
+    html += `
+      <tr>
+        <td><strong>${escapeHtml(sub.full_name)}</strong></td>
+        <td><span class="activity-badge">Activity ${sub.activity_number}</span></td>
+        <td>${date}</td>
+        <td><code class="code-preview">${escapeHtml(codePreview)}</code></td>
+        <td>
+          <button class="btn btn-small btn-primary" onclick="viewCode(${sub.id}, '${escapeHtml(sub.full_name)}', ${sub.activity_number})">
+            View Code
+          </button>
+        </td>
+      </tr>
+    `;
   });
+  
+  tbody.innerHTML = html;
 }
 
 // ============================================
@@ -79,115 +136,110 @@ function populateFilters() {
 function filterSubmissions() {
   const studentFilter = document.getElementById('filterStudent').value;
   const activityFilter = document.getElementById('filterActivity').value;
-
-  filteredSubmissions = allSubmissions.filter(submission => {
-    const studentMatch = !studentFilter || submission.full_name === studentFilter;
-    const activityMatch = !activityFilter || submission.activity_number.toString() === activityFilter;
-    return studentMatch && activityMatch;
-  });
-
-  displaySubmissions();
-}
-
-// ============================================
-// AFFICHER LES SOUMISSIONS
-// ============================================
-
-function displaySubmissions() {
-  const tbody = document.getElementById('submissionsTable');
-
-  if (filteredSubmissions.length === 0) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="5" class="text-center">No submissions found</td>
-      </tr>
-    `;
-    return;
+  
+  let filtered = allSubmissions;
+  
+  if (studentFilter) {
+    filtered = filtered.filter(sub => sub.full_name === studentFilter);
   }
-
-  tbody.innerHTML = filteredSubmissions.map(submission => `
-    <tr>
-      <td>${submission.full_name}</td>
-      <td class="activity-num">Activity #${submission.activity_number}</td>
-      <td>${new Date(submission.created_at).toLocaleString()}</td>
-      <td class="code-preview">${getCodePreview(submission.code_text)}</td>
-      <td>
-        <button class="btn btn-small btn-primary" onclick="viewCode('${escapeHtml(submission.full_name)}', ${submission.activity_number}, '${escapeHtml(submission.code_text)}')">
-          View Code
-        </button>
-      </td>
-    </tr>
-  `).join('');
+  
+  if (activityFilter) {
+    filtered = filtered.filter(sub => sub.activity_number === parseInt(activityFilter));
+  }
+  
+  displaySubmissions(filtered);
 }
 
 // ============================================
-// VOIR LE CODE
+// VIEW CODE MODAL
 // ============================================
 
-function viewCode(studentName, activityNum, code) {
-  document.getElementById('modalTitle').textContent = `${studentName} - Activity #${activityNum}`;
-  document.getElementById('codeContent').textContent = code;
-  document.getElementById('codeModal').classList.add('active');
+function viewCode(id, studentName, activityNumber) {
+  const submission = allSubmissions.find(s => s.id === id);
+  
+  if (submission) {
+    document.getElementById('modalTitle').textContent = 
+      `${studentName} - Activity ${activityNumber}`;
+    document.getElementById('codeContent').textContent = submission.code_text;
+    document.getElementById('codeModal').style.display = 'block';
+  }
 }
 
 function closeCodeModal() {
-  document.getElementById('codeModal').classList.remove('active');
+  document.getElementById('codeModal').style.display = 'none';
 }
 
-document.addEventListener('click', (e) => {
-  const modal = document.getElementById('codeModal');
-  if (e.target === modal) {
-    closeCodeModal();
-  }
-});
-
 // ============================================
-// EXPORTER EN CSV
+// EXPORT CSV
 // ============================================
 
 function exportToCSV() {
-  if (filteredSubmissions.length === 0) {
-    alert('No submissions to export');
+  if (allSubmissions.length === 0) {
+    alert('No data to export');
     return;
   }
-
-  let csv = 'Student Name,Activity Number,Submission Date,Code\n';
-
-  filteredSubmissions.forEach(submission => {
-    const studentName = submission.full_name.replace(/,/g, '');
-    const date = new Date(submission.created_at).toLocaleString().replace(/,/g, '');
-    const code = submission.code_text.replace(/"/g, '""').replace(/\n/g, ' ');
-
-    csv += `"${studentName}","${submission.activity_number}","${date}","${code}"\n`;
+  
+  // Créer les en-têtes CSV
+  const headers = ['Student Name', 'Activity', 'Submission Date', 'Code'];
+  const csvRows = [];
+  
+  // Ajouter les en-têtes
+  csvRows.push(headers.join(','));
+  
+  // Ajouter les données
+  allSubmissions.forEach(sub => {
+    const date = new Date(sub.created_at).toLocaleString('fr-FR');
+    const code = sub.code_text.replace(/"/g, '""'); // Échapper les guillemets
+    const row = [
+      `"${sub.full_name}"`,
+      sub.activity_number,
+      `"${date}"`,
+      `"${code}"`
+    ];
+    csvRows.push(row.join(','));
   });
-
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `dart_submissions_${new Date().toISOString().split('T')[0]}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  window.URL.revokeObjectURL(url);
-  document.body.removeChild(a);
+  
+  // Créer le fichier CSV
+  const csvString = csvRows.join('\n');
+  const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  
+  link.setAttribute('href', url);
+  link.setAttribute('download', `submissions_${new Date().toISOString().split('T')[0]}.csv`);
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
 // ============================================
-// HELPERS
+// HELPER FUNCTIONS
 // ============================================
-
-function getCodePreview(code) {
-  const preview = code.substring(0, 50).replace(/\n/g, ' ');
-  return preview + (code.length > 50 ? '...' : '');
-}
 
 function escapeHtml(text) {
-  const map = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;'
-  };
-  return text.replace(/[&<>"']/g, m => map[m]);
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
+
+function showError(message) {
+  const tbody = document.getElementById('submissionsTable');
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="5" class="text-center error">❌ ${message}</td>
+    </tr>
+  `;
+}
+
+// ============================================
+// MODAL CLICK OUTSIDE
+// ============================================
+
+window.onclick = function(event) {
+  const modal = document.getElementById('codeModal');
+  if (event.target === modal) {
+    closeCodeModal();
+  }
+};
