@@ -4,6 +4,7 @@
 
 // État global
 let currentUser = null;
+let allUsers = []; // Stocker tous les utilisateurs
 
 // Initialiser l'app
 document.addEventListener('DOMContentLoaded', () => {
@@ -23,6 +24,100 @@ function initializeApp() {
   // Event listeners
   document.getElementById('loginForm').addEventListener('submit', handleLogin);
   document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+  
+  // Charger tous les utilisateurs au démarrage
+  loadAllUsers();
+}
+
+// ============================================
+// CHARGER TOUS LES UTILISATEURS
+// ============================================
+
+async function loadAllUsers() {
+  try {
+    console.log("📊 Chargement de tous les utilisateurs...");
+    
+    const { data, error } = await window.supabase
+      .from('users')
+      .select('*')
+      .order('full_name', { ascending: true });
+
+    if (error) {
+      console.error("❌ Erreur chargement utilisateurs:", error);
+      return;
+    }
+
+    allUsers = data || [];
+    console.log("✅ Tous les utilisateurs chargés:", allUsers);
+    
+    // Afficher le tableau des utilisateurs dans la console
+    displayUsersTable(allUsers);
+    
+    return allUsers;
+  } catch (err) {
+    console.error('🔥 Erreur:', err);
+  }
+}
+
+// ============================================
+// AFFICHER TABLEAU DES UTILISATEURS
+// ============================================
+
+function displayUsersTable(users) {
+  console.log("\n" + "=".repeat(80));
+  console.log("📋 LISTE DES UTILISATEURS ENREGISTRÉS");
+  console.log("=".repeat(80));
+  
+  if (!users || users.length === 0) {
+    console.log("❌ Aucun utilisateur trouvé");
+    return;
+  }
+  
+  // En-tête du tableau
+  console.log("| ID | Nom complet | Date de création |");
+  console.log("-".repeat(50));
+  
+  // Afficher chaque utilisateur
+  users.forEach(user => {
+    const date = new Date(user.created_at).toLocaleString('fr-FR');
+    console.log(`| ${user.id} | ${user.full_name} | ${date} |`);
+  });
+  
+  console.log("=".repeat(80));
+  console.log(`✅ Total: ${users.length} utilisateur(s)`);
+  console.log("=".repeat(80) + "\n");
+}
+
+// ============================================
+// RECHERCHER UTILISATEUR DANS LE TABLEAU LOCAL
+// ============================================
+
+function findUserInLocalArray(full_name) {
+  console.log(`🔍 Recherche de "${full_name}" dans le tableau local...`);
+  
+  // Recherche exacte (case insensitive)
+  const exactMatch = allUsers.find(user => 
+    user.full_name.toLowerCase() === full_name.toLowerCase()
+  );
+  
+  if (exactMatch) {
+    console.log("✅ Correspondance exacte trouvée:", exactMatch);
+    return exactMatch;
+  }
+  
+  // Recherche approximative (contient)
+  const similarMatches = allUsers.filter(user => 
+    user.full_name.toLowerCase().includes(full_name.toLowerCase()) ||
+    full_name.toLowerCase().includes(user.full_name.toLowerCase())
+  );
+  
+  if (similarMatches.length > 0) {
+    console.log("⚠️ Correspondances similaires trouvées:", similarMatches);
+    return similarMatches[0]; // Retourner la première correspondance
+  }
+  
+  console.log("❌ Aucune correspondance trouvée");
+  return null;
 }
 
 // ============================================
@@ -35,6 +130,13 @@ async function handleLogin(e) {
   console.log("==== LOGIN START ====");
 
   const input = document.getElementById('fullName');
+  console.log("Input element:", input);
+
+  if (!input) {
+    console.error("❌ Input fullName not found in HTML");
+    return;
+  }
+
   const full_name = input.value.trim();
   const errorDiv = document.getElementById('loginError');
 
@@ -42,58 +144,110 @@ async function handleLogin(e) {
 
   if (!full_name) {
     errorDiv.textContent = 'Please enter your name';
+    console.warn("❌ Empty name");
     return;
   }
 
   try {
     console.log("🔍 Testing connection to Supabase...");
-    
-    // TEST SIMPLE - voir si la table existe
-    const { data: testData, error: testError } = await window.supabase
-      .from('users')
-      .select('count', { count: 'exact', head: true });
-    
-    console.log("Test connexion:", { testData, testError });
+    console.log("Supabase client available:", window.supabase);
 
-    if (testError) {
-      console.error("❌ Erreur de connexion:", testError);
-      errorDiv.textContent = "Erreur de connexion à la base de données";
+    // Vérifier que le client Supabase est disponible
+    if (!window.supabase) {
+      console.error("❌ window.supabase is undefined");
+      errorDiv.textContent = "Database connection error: Supabase client not initialized";
       return;
     }
 
-    // RECHERCHE DE L'UTILISATEUR
-    console.log("🔍 Searching for user:", full_name);
-    
-    const { data, error } = await window.supabase
+    // Vérifier que la méthode from existe
+    if (typeof window.supabase.from !== 'function') {
+      console.error("❌ window.supabase.from is not a function", window.supabase);
+      errorDiv.textContent = "Database connection error: Invalid Supabase client";
+      return;
+    }
+
+    // TEST 1: SELECT ALL USERS (pour mettre à jour le tableau)
+    console.log("📊 Récupération de tous les utilisateurs...");
+    const { data: allUsersData, error: allError } = await window.supabase
       .from('users')
       .select('*')
-      .eq('full_name', full_name);
+      .order('full_name', { ascending: true });
 
-    console.log("Résultats bruts:", { data, error });
+    console.log("Tous les utilisateurs:", allUsersData);
+    console.log("Erreur éventuelle:", allError);
 
-    if (error) {
-      console.error("❌ Query error:", error);
-      errorDiv.textContent = "Database error: " + error.message;
+    if (allError) {
+      console.error("❌ Erreur:", allError);
+      
+      if (allError.code === '42P01') {
+        errorDiv.textContent = "Table 'users' doesn't exist. Please create it in Supabase.";
+      } else if (allError.message.includes('permission denied')) {
+        errorDiv.textContent = "Permission denied. Check RLS policies.";
+      } else if (allError.message.includes('JWT')) {
+        errorDiv.textContent = "Invalid API key. Check your Supabase anon key.";
+      } else {
+        errorDiv.textContent = "Database error: " + allError.message;
+      }
       return;
     }
 
-    if (!data || data.length === 0) {
-      console.warn("❌ User not found:", full_name);
-      errorDiv.textContent = 'Access denied. You are not registered.';
-      return;
+    // Mettre à jour le tableau local
+    allUsers = allUsersData || [];
+    
+    // Afficher le tableau des utilisateurs
+    displayUsersTable(allUsers);
+
+    // TEST 2: Vérifier si l'utilisateur existe
+    console.log(`🔍 Vérification si "${full_name}" existe...`);
+    
+    // Méthode 1: Recherche dans le tableau local (rapide)
+    const localUser = findUserInLocalArray(full_name);
+    
+    if (localUser) {
+      console.log("✅ Utilisateur trouvé dans le tableau local:", localUser);
+      
+      // Vérification supplémentaire avec la base de données
+      const { data: dbUser, error: dbError } = await window.supabase
+        .from('users')
+        .select('*')
+        .eq('full_name', localUser.full_name)
+        .single();
+
+      if (dbError) {
+        console.error("❌ Erreur vérification BD:", dbError);
+      } else {
+        console.log("✅ Vérification BD réussie:", dbUser);
+        
+        currentUser = dbUser.full_name;
+        localStorage.setItem('dartUser', dbUser.full_name);
+        errorDiv.textContent = '';
+        
+        console.log(`✅ Connexion réussie pour: ${dbUser.full_name}`);
+        console.log(`📊 Statistiques: Utilisateur #${dbUser.id}, inscrit le ${new Date(dbUser.created_at).toLocaleString()}`);
+        
+        showDashboard();
+        loadUserSubmissions();
+      }
+    } else {
+      console.warn(`❌ Utilisateur "${full_name}" non trouvé`);
+      
+      // Afficher les suggestions
+      const suggestions = allUsers.filter(user => 
+        user.full_name.toLowerCase().includes(full_name.toLowerCase())
+      );
+      
+      if (suggestions.length > 0) {
+        console.log("💡 Utilisateurs similaires trouvés:");
+        suggestions.forEach(s => console.log(`   - ${s.full_name}`));
+        errorDiv.textContent = `Utilisateur non trouvé. Essayez: ${suggestions.map(s => s.full_name).join(', ')}`;
+      } else {
+        errorDiv.textContent = 'Accès refusé. Vous n\'êtes pas enregistré.';
+      }
     }
-
-    console.log("✅ LOGIN SUCCESS for user:", data[0]);
-
-    currentUser = full_name;
-    localStorage.setItem('dartUser', full_name);
-    errorDiv.textContent = '';
-    showDashboard();
-    loadUserSubmissions();
 
   } catch (err) {
-    console.error('🔥 Unexpected Login Error:', err);
-    errorDiv.textContent = 'Connection error: ' + err.message;
+    console.error('🔥 Erreur inattendue:', err);
+    errorDiv.textContent = 'Erreur de connexion: ' + err.message;
   }
 
   console.log("==== LOGIN END ====");
@@ -127,7 +281,7 @@ function showLoginScreen() {
 function showDashboard() {
   document.getElementById('loginScreen').classList.remove('active');
   document.getElementById('dashboardScreen').classList.add('active');
-  document.getElementById('userGreeting').textContent = `Welcome, ${currentUser}!`;
+  document.getElementById('userGreeting').textContent = `Bienvenue, ${currentUser}!`;
 }
 
 // ============================================
@@ -136,7 +290,7 @@ function showDashboard() {
 
 async function submitActivity(activityNumber) {
   if (!currentUser) {
-    alert('Please login first');
+    alert('Veuillez vous connecter d\'abord');
     return;
   }
 
@@ -144,14 +298,17 @@ async function submitActivity(activityNumber) {
   const feedbackDiv = document.getElementById(`feedback${activityNumber}`);
 
   if (!code) {
-    showFeedback(feedbackDiv, '❌ Code cannot be empty', 'error');
+    showFeedback(feedbackDiv, '❌ Le code ne peut pas être vide', 'error');
     return;
   }
 
   try {
-    console.log(`📝 Submitting activity ${activityNumber} for user ${currentUser}`);
+    console.log(`📝 Soumission activité ${activityNumber} pour ${currentUser}`);
     
-    // Insérer ou mettre à jour dans Supabase
+    if (!window.supabase || typeof window.supabase.from !== 'function') {
+      throw new Error("Client Supabase non initialisé");
+    }
+
     const { data, error } = await window.supabase
       .from('submissions')
       .upsert(
@@ -167,29 +324,34 @@ async function submitActivity(activityNumber) {
       );
 
     if (error) {
-      console.error("❌ Submit error:", error);
-      showFeedback(feedbackDiv, '❌ ' + error.message, 'error');
+      console.error("❌ Erreur soumission:", error);
+      
+      if (error.code === '42P01') {
+        showFeedback(feedbackDiv, '❌ Table submissions n\'existe pas', 'error');
+      } else {
+        showFeedback(feedbackDiv, '❌ ' + error.message, 'error');
+      }
       return;
     }
 
-    console.log("✅ Submit success:", data);
-    showFeedback(feedbackDiv, '✅ Submitted successfully!', 'success');
+    console.log("✅ Soumission réussie:", data);
+    showFeedback(feedbackDiv, '✅ Soumis avec succès!', 'success');
 
   } catch (err) {
-    console.error('🔥 Submit error:', err);
-    showFeedback(feedbackDiv, '❌ Error submitting: ' + err.message, 'error');
+    console.error('🔥 Erreur soumission:', err);
+    showFeedback(feedbackDiv, '❌ Erreur: ' + err.message, 'error');
   }
 }
 
 // ============================================
-// CHARGER LES SOUMISSIONS DE L'UTILISATEUR
+// CHARGER LES SOUMISSIONS
 // ============================================
 
 async function loadUserSubmissions() {
   if (!currentUser) return;
 
   try {
-    console.log(`📂 Loading submissions for user: ${currentUser}`);
+    console.log(`📂 Chargement des soumissions pour ${currentUser}`);
     
     const { data, error } = await window.supabase
       .from('submissions')
@@ -197,24 +359,24 @@ async function loadUserSubmissions() {
       .eq('full_name', currentUser);
 
     if (error) {
-      console.error('❌ Load error:', error);
+      console.error('❌ Erreur chargement:', error);
       return;
     }
 
-    console.log("📂 Loaded submissions:", data);
+    console.log("📂 Soumissions chargées:", data);
 
-    // Afficher les soumissions sauvegardées
     if (data && data.length > 0) {
       data.forEach(submission => {
         const textarea = document.getElementById(`code${submission.activity_number}`);
         if (textarea) {
           textarea.value = submission.code_text;
+          console.log(`✅ Activité ${submission.activity_number} chargée`);
         }
       });
     }
 
   } catch (err) {
-    console.error('🔥 Load submissions error:', err);
+    console.error('🔥 Erreur:', err);
   }
 }
 
@@ -234,3 +396,26 @@ function showFeedback(element, message, type) {
   }
 }
 
+// ============================================
+// FONCTIONS UTILITAIRES (à utiliser dans la console)
+// ============================================
+
+// Pour afficher tous les utilisateurs dans la console
+window.showAllUsers = function() {
+  displayUsersTable(allUsers);
+};
+
+// Pour rechercher un utilisateur
+window.searchUser = function(name) {
+  return findUserInLocalArray(name);
+};
+
+// Pour recharger la liste des utilisateurs
+window.reloadUsers = async function() {
+  await loadAllUsers();
+};
+
+console.log("🚀 Fonctions disponibles dans la console:");
+console.log("   - showAllUsers() : Afficher tous les utilisateurs");
+console.log("   - searchUser('nom') : Rechercher un utilisateur");
+console.log("   - reloadUsers() : Recharger la liste");
