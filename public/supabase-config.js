@@ -1,44 +1,18 @@
 // ============================================
-// SUPABASE CONFIGURATION - CORRIGÉ
+// SUPABASE CONFIGURATION
 // ============================================
 
-console.log('Loading Supabase config...');
-
-// Attendre que supabase-js soit chargé
-if (typeof window === 'undefined' || !window.supabase) {
-  console.error('❌ Supabase JS library not loaded yet!');
-} else {
-  console.log('✅ Supabase JS library found!');
-}
-
 const SUPABASE_URL = 'https://lmcfgnraayxurvwemvzq.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_RU-703uhus4WN11X6USN1A_I_vOk4nV';
 
-console.log('URL:', SUPABASE_URL);
-console.log('Key:', SUPABASE_ANON_KEY.substring(0, 20) + '...');
+// NOUVELLE CLÉ (celle que vous venez de me donner)
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxtY2ZnbnJhYXl4dXJ2d2VtdnpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5NDE1OTcsImV4cCI6MjA4NzUxNzU5N30.6YIP8S2yLebwYcjHyjBvhdrs-U5WbwOmzA-XA_w8U8A';
 
-// Initialiser Supabase
-let supabase = null;
+// Initialiser Supabase client
+window.supabase = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY
+);
 
-try {
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  console.log('✅ Supabase initialized successfully!');
-  console.log('Supabase object:', supabase);
-} catch (err) {
-  console.error('❌ Error initializing Supabase:', err);
-}
-
-// Tester la connexion
-if (supabase) {
-  supabase
-    .from('users')
-    .select('count', { count: 'exact', head: true })
-    .then(({ count, error }) => {
-      if (error) {
-        console.error('❌ Database connection error:', error);
-      } else {
-        console.log(`✅ Database connected! Total users: ${count}`);
-      }
-    })
-    .catch(err => console.error('❌ Connection test error:', err));
-}
+console.log("✅ Supabase client created:", window.supabase);
+console.log("✅ URL:", SUPABASE_URL);
+console.log("✅ New KEY (first 20 chars):", SUPABASE_ANON_KEY.substring(0, 20) + "...");
