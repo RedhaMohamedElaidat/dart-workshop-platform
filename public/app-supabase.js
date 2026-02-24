@@ -1,5 +1,5 @@
 // ============================================
-// APP.JS - Frontend avec Supabase (Sans Backend)
+// APP-SUPABASE.JS - Frontend avec Supabase
 // ============================================
 
 // État global
@@ -7,6 +7,7 @@ let currentUser = null;
 
 // Initialiser l'app
 document.addEventListener('DOMContentLoaded', () => {
+  console.log("🚀 App initializing...");
   initializeApp();
 });
 
@@ -30,38 +31,59 @@ function initializeApp() {
 
 async function handleLogin(e) {
   e.preventDefault();
-  const fullName = document.getElementById('fullName').value.trim();
+
+  console.log("==== LOGIN START ====");
+
+  const input = document.getElementById('fullName');
+  const full_name = input.value.trim();
   const errorDiv = document.getElementById('loginError');
 
-  if (!fullName) {
+  console.log("Typed name:", full_name);
+
+  if (!full_name) {
     errorDiv.textContent = 'Please enter your name';
     return;
   }
 
-  // Vérifier si l'utilisateur est autorisé
   try {
-    const { data, error } = await supabase
+    console.log("🔍 Testing connection to Supabase...");
+
+    // RECHERCHE DE L'UTILISATEUR
+    console.log("🔍 Searching for user:", full_name);
+    const { data, error } = await window.supabase
       .from('users')
       .select('*')
-      .eq('full_name', fullName)
-      .single();
+      .eq('full_name', full_name);
 
-    if (error || !data) {
+    console.log("User Query Data:", data);
+    console.log("User Query Error:", error);
+
+    if (error) {
+      console.error("❌ Query error:", error);
+      errorDiv.textContent = "Database error: " + error.message;
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      console.warn("❌ User not found:", full_name);
       errorDiv.textContent = 'Access denied. You are not registered.';
       return;
     }
 
-    // Login réussi
-    currentUser = fullName;
-    localStorage.setItem('dartUser', fullName);
+    console.log("✅ LOGIN SUCCESS for user:", data[0]);
+
+    currentUser = full_name;
+    localStorage.setItem('dartUser', full_name);
     errorDiv.textContent = '';
     showDashboard();
     loadUserSubmissions();
 
   } catch (err) {
-    console.error('Login error:', err);
-    errorDiv.textContent = 'Connection error. Please try again.';
+    console.error('🔥 Unexpected Login Error:', err);
+    errorDiv.textContent = 'Connection error: ' + err.message;
   }
+
+  console.log("==== LOGIN END ====");
 }
 
 // ============================================
@@ -114,25 +136,35 @@ async function submitActivity(activityNumber) {
   }
 
   try {
+    console.log(`📝 Submitting activity ${activityNumber} for user ${currentUser}`);
+    
     // Insérer ou mettre à jour dans Supabase
-    const { data, error } = await supabase
+    const { data, error } = await window.supabase
       .from('submissions')
-      .upsert({
-        full_name: currentUser,
-        activity_number: activityNumber,
-        code_text: code
-      }, { onConflict: 'full_name,activity_number' });
+      .upsert(
+        {
+          full_name: currentUser,
+          activity_number: activityNumber,
+          code_text: code,
+          submitted_at: new Date().toISOString()
+        },
+        { 
+          onConflict: 'full_name,activity_number'
+        }
+      );
 
     if (error) {
+      console.error("❌ Submit error:", error);
       showFeedback(feedbackDiv, '❌ ' + error.message, 'error');
       return;
     }
 
+    console.log("✅ Submit success:", data);
     showFeedback(feedbackDiv, '✅ Submitted successfully!', 'success');
 
   } catch (err) {
-    console.error('Submit error:', err);
-    showFeedback(feedbackDiv, '❌ Error submitting. Try again.', 'error');
+    console.error('🔥 Submit error:', err);
+    showFeedback(feedbackDiv, '❌ Error submitting: ' + err.message, 'error');
   }
 }
 
@@ -144,18 +176,22 @@ async function loadUserSubmissions() {
   if (!currentUser) return;
 
   try {
-    const { data, error } = await supabase
+    console.log(`📂 Loading submissions for user: ${currentUser}`);
+    
+    const { data, error } = await window.supabase
       .from('submissions')
       .select('*')
       .eq('full_name', currentUser);
 
     if (error) {
-      console.error('Load error:', error);
+      console.error('❌ Load error:', error);
       return;
     }
 
+    console.log("📂 Loaded submissions:", data);
+
     // Afficher les soumissions sauvegardées
-    if (data) {
+    if (data && data.length > 0) {
       data.forEach(submission => {
         const textarea = document.getElementById(`code${submission.activity_number}`);
         if (textarea) {
@@ -165,7 +201,7 @@ async function loadUserSubmissions() {
     }
 
   } catch (err) {
-    console.error('Load submissions error:', err);
+    console.error('🔥 Load submissions error:', err);
   }
 }
 
