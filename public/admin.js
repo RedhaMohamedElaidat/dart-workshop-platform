@@ -1,179 +1,139 @@
 // ============================================
-// ADMIN.JS - Admin Panel Logic
+// ADMIN.JS - Admin Panel avec Supabase
 // ============================================
 
-// Admin state
-const adminState = {
-  allSubmissions: [],
-  filteredSubmissions: [],
-  adminToken: 'admin_dart_workshop_2024'
-};
+let allSubmissions = [];
+let filteredSubmissions = [];
 
-// Initialize admin panel
+// Initialiser
 document.addEventListener('DOMContentLoaded', () => {
-  initializeAdmin();
-});
-
-function initializeAdmin() {
-  // Load submissions
-  loadAllSubmissions();
-
-  // Set up event listeners
   document.getElementById('backBtn').addEventListener('click', () => {
     window.location.href = '/';
   });
 
   document.getElementById('exportBtn').addEventListener('click', exportToCSV);
 
-  // Check token in URL (optional: for direct admin access)
-  const params = new URLSearchParams(window.location.search);
-  if (!params.has('token') && !sessionStorage.getItem('adminToken')) {
-    // Could add password protection here
-    // For now, admin panel is publicly accessible but token-gated at API level
-  }
-}
+  loadAllSubmissions();
+});
 
 // ============================================
-// LOAD ALL SUBMISSIONS
+// CHARGER TOUTES LES SOUMISSIONS
 // ============================================
 
 async function loadAllSubmissions() {
   try {
-    const response = await fetch('/api/admin/submissions', {
-      method: 'GET',
-      headers: {
-        'x-admin-token': adminState.adminToken
-      }
-    });
+    const { data, error } = await supabase
+      .from('submissions')
+      .select('*')
+      .order('full_name', { ascending: true })
+      .order('activity_number', { ascending: true });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+    if (error) {
+      document.getElementById('submissionsTable').innerHTML = `
+        <tr>
+          <td colspan="5" class="text-center error">
+            ${error.message}
+          </td>
+        </tr>
+      `;
+      return;
     }
 
-    const data = await response.json();
+    allSubmissions = data || [];
+    filteredSubmissions = [...allSubmissions];
+    populateFilters();
+    displaySubmissions();
 
-    if (data.success) {
-      adminState.allSubmissions = data.submissions || [];
-      adminState.filteredSubmissions = [...adminState.allSubmissions];
-
-      // Populate student filter dropdown
-      populateStudentFilter();
-
-      // Display submissions
-      displaySubmissions();
-    } else {
-      showError('Failed to load submissions: ' + data.message);
-    }
   } catch (err) {
-    console.error('Load submissions error:', err);
-    showError('Error loading submissions. Please refresh the page.');
+    console.error('Load error:', err);
+    document.getElementById('submissionsTable').innerHTML = `
+      <tr>
+        <td colspan="5" class="text-center error">
+          Connection error
+        </td>
+      </tr>
+    `;
   }
 }
 
 // ============================================
-// POPULATE STUDENT FILTER
+// REMPLIR LES FILTRES
 // ============================================
 
-function populateStudentFilter() {
-  const filterSelect = document.getElementById('filterStudent');
-  const students = [...new Set(adminState.allSubmissions.map(s => s.full_name))];
-  students.sort();
+function populateFilters() {
+  const studentFilter = document.getElementById('filterStudent');
+  const uniqueStudents = [...new Set(allSubmissions.map(s => s.full_name))];
 
-  students.forEach(student => {
-    if (!filterSelect.querySelector(`option[value="${student}"]`)) {
-      const option = document.createElement('option');
-      option.value = student;
-      option.textContent = student;
-      filterSelect.appendChild(option);
-    }
+  uniqueStudents.forEach(student => {
+    const option = document.createElement('option');
+    option.value = student;
+    option.textContent = student;
+    studentFilter.appendChild(option);
   });
 }
 
 // ============================================
-// FILTER SUBMISSIONS
+// FILTRER LES SOUMISSIONS
 // ============================================
 
 function filterSubmissions() {
   const studentFilter = document.getElementById('filterStudent').value;
   const activityFilter = document.getElementById('filterActivity').value;
 
-  adminState.filteredSubmissions = adminState.allSubmissions.filter(submission => {
-    const matchStudent = !studentFilter || submission.full_name === studentFilter;
-    const matchActivity = !activityFilter || submission.activity_number.toString() === activityFilter;
-    return matchStudent && matchActivity;
+  filteredSubmissions = allSubmissions.filter(submission => {
+    const studentMatch = !studentFilter || submission.full_name === studentFilter;
+    const activityMatch = !activityFilter || submission.activity_number.toString() === activityFilter;
+    return studentMatch && activityMatch;
   });
 
   displaySubmissions();
 }
 
 // ============================================
-// DISPLAY SUBMISSIONS TABLE
+// AFFICHER LES SOUMISSIONS
 // ============================================
 
 function displaySubmissions() {
   const tbody = document.getElementById('submissionsTable');
-  tbody.innerHTML = '';
 
-  if (adminState.filteredSubmissions.length === 0) {
+  if (filteredSubmissions.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="5" class="text-center no-data">
-          No submissions found
-        </td>
+        <td colspan="5" class="text-center">No submissions found</td>
       </tr>
     `;
     return;
   }
 
-  adminState.filteredSubmissions.forEach((submission, index) => {
-    const row = document.createElement('tr');
-    const timestamp = new Date(submission.timestamp);
-    const formattedDate = timestamp.toLocaleString();
-    const codePreview = submission.code_text.substring(0, 50).replace(/\n/g, ' ') + 
-                        (submission.code_text.length > 50 ? '...' : '');
-
-    row.innerHTML = `
-      <td><strong>${submission.full_name}</strong></td>
+  tbody.innerHTML = filteredSubmissions.map(submission => `
+    <tr>
+      <td>${submission.full_name}</td>
+      <td class="activity-num">Activity #${submission.activity_number}</td>
+      <td>${new Date(submission.created_at).toLocaleString()}</td>
+      <td class="code-preview">${getCodePreview(submission.code_text)}</td>
       <td>
-        <span class="activity-badge">#${submission.activity_number}</span>
-      </td>
-      <td>${formattedDate}</td>
-      <td>
-        <code class="code-preview">${escapeHtml(codePreview)}</code>
-      </td>
-      <td>
-        <button class="btn btn-primary" onclick="viewCode('${index}', ${submission.activity_number})">
-          View
+        <button class="btn btn-small btn-primary" onclick="viewCode('${escapeHtml(submission.full_name)}', ${submission.activity_number}, '${escapeHtml(submission.code_text)}')">
+          View Code
         </button>
       </td>
-    `;
-
-    tbody.appendChild(row);
-  });
+    </tr>
+  `).join('');
 }
 
 // ============================================
-// VIEW CODE MODAL
+// VOIR LE CODE
 // ============================================
 
-function viewCode(index, activityNum) {
-  const submission = adminState.filteredSubmissions[index];
-  const modal = document.getElementById('codeModal');
-  const modalTitle = document.getElementById('modalTitle');
-  const codeContent = document.getElementById('codeContent');
-
-  modalTitle.textContent = `${submission.full_name} - Activity #${activityNum}`;
-  codeContent.textContent = submission.code_text;
-
-  modal.classList.add('show');
+function viewCode(studentName, activityNum, code) {
+  document.getElementById('modalTitle').textContent = `${studentName} - Activity #${activityNum}`;
+  document.getElementById('codeContent').textContent = code;
+  document.getElementById('codeModal').classList.add('active');
 }
 
 function closeCodeModal() {
-  const modal = document.getElementById('codeModal');
-  modal.classList.remove('show');
+  document.getElementById('codeModal').classList.remove('active');
 }
 
-// Close modal when clicking outside
 document.addEventListener('click', (e) => {
   const modal = document.getElementById('codeModal');
   if (e.target === modal) {
@@ -182,49 +142,44 @@ document.addEventListener('click', (e) => {
 });
 
 // ============================================
-// EXPORT TO CSV
+// EXPORTER EN CSV
 // ============================================
 
 function exportToCSV() {
-  if (adminState.filteredSubmissions.length === 0) {
+  if (filteredSubmissions.length === 0) {
     alert('No submissions to export');
     return;
   }
 
-  const headers = ['Student Name', 'Activity #', 'Submission Date', 'Code'];
-  const rows = adminState.filteredSubmissions.map(sub => [
-    sub.full_name,
-    `Activity ${sub.activity_number}`,
-    new Date(sub.timestamp).toLocaleString(),
-    sub.code_text
-  ]);
+  let csv = 'Student Name,Activity Number,Submission Date,Code\n';
 
-  // Escape quotes in code
-  rows.forEach(row => {
-    row[3] = `"${row[3].replace(/"/g, '""')}"`;
+  filteredSubmissions.forEach(submission => {
+    const studentName = submission.full_name.replace(/,/g, '');
+    const date = new Date(submission.created_at).toLocaleString().replace(/,/g, '');
+    const code = submission.code_text.replace(/"/g, '""').replace(/\n/g, ' ');
+
+    csv += `"${studentName}","${submission.activity_number}","${date}","${code}"\n`;
   });
 
-  // Create CSV content
-  let csv = headers.map(h => `"${h}"`).join(',') + '\n';
-  csv += rows.map(row => row.join(',')).join('\n');
-
-  // Download CSV
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-
-  link.setAttribute('href', url);
-  link.setAttribute('download', `dart-submissions-${new Date().toISOString().split('T')[0]}.csv`);
-  link.style.visibility = 'hidden';
-
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `dart_submissions_${new Date().toISOString().split('T')[0]}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
 }
 
 // ============================================
-// UTILITY FUNCTIONS
+// HELPERS
 // ============================================
+
+function getCodePreview(code) {
+  const preview = code.substring(0, 50).replace(/\n/g, ' ');
+  return preview + (code.length > 50 ? '...' : '');
+}
 
 function escapeHtml(text) {
   const map = {
@@ -236,23 +191,3 @@ function escapeHtml(text) {
   };
   return text.replace(/[&<>"']/g, m => map[m]);
 }
-
-function showError(message) {
-  const tbody = document.getElementById('submissionsTable');
-  tbody.innerHTML = `
-    <tr>
-      <td colspan="5" class="text-center">
-        <div style="color: #fca5a5; padding: 20px;">
-          ⚠️ ${escapeHtml(message)}
-        </div>
-      </td>
-    </tr>
-  `;
-}
-
-// Keyboard shortcut to close modal
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') {
-    closeCodeModal();
-  }
-});

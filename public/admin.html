@@ -3,77 +3,161 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Panel - Dart Workshop</title>
+  <title>Dart Workshop - Activity Platform</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="admin.js"></script>
 </head>
 <body>
-  <div class="admin-container">
-    <!-- Header -->
-    <div class="admin-header">
-      <div class="header-content">
-        <h1>📊 Admin Panel - Submissions</h1>
-        <p class="subtitle">View all activity submissions from participants</p>
-      </div>
-      <button id="backBtn" class="btn btn-secondary">← Back to Home</button>
-    </div>
-
-    <!-- Filter Section -->
-    <div class="admin-filters">
-      <div class="filter-group">
-        <label for="filterStudent">Filter by Student:</label>
-        <select id="filterStudent" onchange="filterSubmissions()">
-          <option value="">All Students</option>
-        </select>
-      </div>
-      <div class="filter-group">
-        <label for="filterActivity">Filter by Activity:</label>
-        <select id="filterActivity" onchange="filterSubmissions()">
-          <option value="">All Activities</option>
-          <option value="1">Activity 1</option>
-          <option value="2">Activity 2</option>
-          <option value="3">Activity 3</option>
-        </select>
-      </div>
-      <button id="exportBtn" class="btn btn-secondary">📥 Export to CSV</button>
-    </div>
-
-    <!-- Submissions Table -->
-    <div class="admin-table-wrapper">
-      <table class="admin-table">
-        <thead>
-          <tr>
-            <th>Student Name</th>
-            <th>Activity #</th>
-            <th>Submission Date</th>
-            <th>Code Preview</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody id="submissionsTable">
-          <tr>
-            <td colspan="5" class="text-center loading">Loading submissions...</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- Code Viewer Modal -->
-    <div id="codeModal" class="modal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h2 id="modalTitle">Code Submission</h2>
-          <button class="modal-close" onclick="closeCodeModal()">×</button>
+  <!-- Login Screen -->
+  <div id="loginScreen" class="screen active">
+    <div class="login-container">
+      <div class="login-card">
+        <div class="login-header">
+          <h1>🎯 Dart Workshop</h1>
+          <p>Activity Submission Platform</p>
         </div>
-        <div class="modal-body">
-          <pre id="codeContent" class="code-block"></pre>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="closeCodeModal()">Close</button>
+
+        <form id="loginForm" class="login-form">
+          <div class="form-group">
+            <label for="fullName">Full Name</label>
+            <input
+              type="text"
+              id="fullName"
+              placeholder="Enter your full name"
+              required
+              autocomplete="name"
+            />
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-large">
+            Login
+          </button>
+
+          <div id="loginError" class="error-message"></div>
+        </form>
+
+        <!--<div class="login-info">
+          <p class="text-muted">Allowed participants:</p>
+          <ul class="participant-list">
+            <li>Bekouch Ikram</li>
+            <li>Djaoud Sara</li>
+            <li>Rahali Hanane</li>
+          </ul>-->
         </div>
       </div>
     </div>
   </div>
 
-  <script src="admin.js"></script>
+  <!-- Dashboard Screen -->
+  <div id="dashboardScreen" class="screen">
+    <div class="dashboard-container">
+      <!-- Header -->
+      <div class="dashboard-header">
+        <div class="header-content">
+          <h1>🎯 Dart Workshop Activities</h1>
+          <p id="userGreeting" class="user-greeting"></p>
+        </div>
+        <button id="logoutBtn" class="btn btn-secondary">Logout</button>
+      </div>
+
+      <!-- Activities Grid -->
+      <div class="activities-container">
+        <!-- Activity 1 -->
+        <div class="activity-card">
+          <div class="activity-header">
+            <h2>Activity 1: Student Average</h2>
+            <span class="activity-number">Activity #1</span>
+          </div>
+
+          <div class="activity-description">
+            <p><strong>Objective:</strong> Write a Dart console program that:</p>
+            <ul>
+              <li>Reads the number of students</li>
+              <li>Reads marks for each student</li>
+              <li>Calculates and displays the average</li>
+            </ul>
+            <p><strong>Example Output:</strong> "The average mark is: 85.5"</p>
+          </div>
+
+          <textarea
+            class="code-textarea"
+            id="code1"
+            placeholder="Write your Dart code here..."
+            spellcheck="false"
+          ></textarea>
+
+          <button class="btn btn-primary submit-btn" onclick="submitActivity(1)">
+            Submit Activity 1
+          </button>
+          <div class="submission-feedback" id="feedback1"></div>
+        </div>
+
+        <!-- Activity 2 -->
+        <div class="activity-card">
+          <div class="activity-header">
+            <h2>Activity 2: Student Class with Map</h2>
+            <span class="activity-number">Activity #2</span>
+          </div>
+
+          <div class="activity-description">
+            <p><strong>Objective:</strong> Create a Dart program that:</p>
+            <ul>
+              <li>Defines a Student class with properties: name, id, grade</li>
+              <li>Uses a Map to store multiple students</li>
+              <li>Displays student information formatted</li>
+              <li>Implements a method to check if student passed (grade ≥ 10)</li>
+            </ul>
+            <p><strong>Example Output:</strong> "Student: Ahmed (ID: 001, Grade: 15) - Passed"</p>
+          </div>
+
+          <textarea
+            class="code-textarea"
+            id="code2"
+            placeholder="Write your Dart code here..."
+            spellcheck="false"
+          ></textarea>
+
+          <button class="btn btn-primary submit-btn" onclick="submitActivity(2)">
+            Submit Activity 2
+          </button>
+          <div class="submission-feedback" id="feedback2"></div>
+        </div>
+
+        <!-- Activity 3 -->
+        <div class="activity-card">
+          <div class="activity-header">
+            <h2>Activity 3: Print Even Numbers</h2>
+            <span class="activity-number">Activity #3</span>
+          </div>
+
+          <div class="activity-description">
+            <p><strong>Objective:</strong> Write a Dart program that:</p>
+            <ul>
+              <li>Reads a number n</li>
+              <li>Prints all even numbers from 1 to n</li>
+              <li><strong>Constraint:</strong> Without using the modulo operator (%)</li>
+              <li>Use alternative methods (division, multiplication, or bitwise operations)</li>
+            </ul>
+            <p><strong>Example Output for n=10:</strong> "2 4 6 8 10"</p>
+          </div>
+
+          <textarea
+            class="code-textarea"
+            id="code3"
+            placeholder="Write your Dart code here..."
+            spellcheck="false"
+          ></textarea>
+
+          <button class="btn btn-primary submit-btn" onclick="submitActivity(3)">
+            Submit Activity 3
+          </button>
+          <div class="submission-feedback" id="feedback3"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>

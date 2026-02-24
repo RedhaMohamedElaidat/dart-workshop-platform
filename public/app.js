@@ -1,281 +1,186 @@
 // ============================================
-// APP.JS - Main Frontend Logic
+// APP.JS - Frontend avec Supabase (Sans Backend)
 // ============================================
 
-// State management
-const appState = {
-  currentUser: null,
-  submissions: {},
-  isLoading: false
-};
+// État global
+let currentUser = null;
 
-// Initialize app
+// Initialiser l'app
 document.addEventListener('DOMContentLoaded', () => {
   initializeApp();
 });
 
 function initializeApp() {
-  // Set up event listeners
-  const loginForm = document.getElementById('loginForm');
-  loginForm.addEventListener('submit', handleLogin);
-
-  const logoutBtn = document.getElementById('logoutBtn');
-  logoutBtn.addEventListener('submit', handleLogout);
-  logoutBtn.addEventListener('click', handleLogout);
-
-  // Check if user is already logged in (session storage)
-  const savedUser = sessionStorage.getItem('dartWorkshopUser');
+  // Vérifier si l'utilisateur est connecté
+  const savedUser = localStorage.getItem('dartUser');
   if (savedUser) {
-    appState.currentUser = savedUser;
+    currentUser = savedUser;
     showDashboard();
     loadUserSubmissions();
   }
+
+  // Event listeners
+  document.getElementById('loginForm').addEventListener('submit', handleLogin);
+  document.getElementById('logoutBtn').addEventListener('click', handleLogout);
 }
 
 // ============================================
-// LOGIN HANDLER
+// LOGIN
 // ============================================
 
 async function handleLogin(e) {
   e.preventDefault();
-
   const fullName = document.getElementById('fullName').value.trim();
   const errorDiv = document.getElementById('loginError');
 
-  // Clear error message
-  errorDiv.classList.remove('show');
-  errorDiv.textContent = '';
-
   if (!fullName) {
-    showError('Please enter your full name', errorDiv);
+    errorDiv.textContent = 'Please enter your name';
     return;
   }
 
-  appState.isLoading = true;
-  const loginBtn = document.querySelector('.login-form button');
-  loginBtn.disabled = true;
-  loginBtn.textContent = 'Logging in...';
-
+  // Vérifier si l'utilisateur est autorisé
   try {
-    const response = await fetch('/api/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ fullName })
-    });
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('full_name', fullName)
+      .single();
 
-    const data = await response.json();
-
-    if (data.success) {
-      // Save user session
-      appState.currentUser = data.user;
-      sessionStorage.setItem('dartWorkshopUser', data.user);
-      sessionStorage.setItem('dartWorkshopToken', data.token);
-
-      // Show dashboard
-      showDashboard();
-      loadUserSubmissions();
-    } else {
-      showError(data.message || 'Login failed', errorDiv);
+    if (error || !data) {
+      errorDiv.textContent = 'Access denied. You are not registered.';
+      return;
     }
+
+    // Login réussi
+    currentUser = fullName;
+    localStorage.setItem('dartUser', fullName);
+    errorDiv.textContent = '';
+    showDashboard();
+    loadUserSubmissions();
+
   } catch (err) {
     console.error('Login error:', err);
-    showError('Network error. Please try again.', errorDiv);
-  } finally {
-    appState.isLoading = false;
-    loginBtn.disabled = false;
-    loginBtn.textContent = 'Login';
+    errorDiv.textContent = 'Connection error. Please try again.';
   }
 }
 
 // ============================================
-// LOGOUT HANDLER
+// LOGOUT
 // ============================================
 
 function handleLogout() {
-  sessionStorage.removeItem('dartWorkshopUser');
-  sessionStorage.removeItem('dartWorkshopToken');
-  appState.currentUser = null;
-  appState.submissions = {};
+  currentUser = null;
+  localStorage.removeItem('dartUser');
 
-  // Clear textareas
+  // Vider les textareas
   document.getElementById('code1').value = '';
   document.getElementById('code2').value = '';
   document.getElementById('code3').value = '';
-
-  // Clear feedback
-  ['feedback1', 'feedback2', 'feedback3'].forEach(id => {
-    const feedback = document.getElementById(id);
-    feedback.classList.remove('success', 'error');
-    feedback.textContent = '';
-  });
-
-  // Reset login form
-  document.getElementById('loginForm').reset();
 
   showLoginScreen();
 }
 
 // ============================================
-// SCREEN NAVIGATION
+// NAVIGATION
 // ============================================
 
 function showLoginScreen() {
-  const loginScreen = document.getElementById('loginScreen');
-  const dashboardScreen = document.getElementById('dashboardScreen');
-
-  loginScreen.classList.add('active');
-  dashboardScreen.classList.remove('active');
+  document.getElementById('loginScreen').classList.add('active');
+  document.getElementById('dashboardScreen').classList.remove('active');
 }
 
 function showDashboard() {
-  const loginScreen = document.getElementById('loginScreen');
-  const dashboardScreen = document.getElementById('dashboardScreen');
-
-  loginScreen.classList.remove('active');
-  dashboardScreen.classList.add('active');
-
-  // Update user greeting
-  const greeting = document.getElementById('userGreeting');
-  greeting.textContent = `Welcome, ${appState.currentUser}!`;
+  document.getElementById('loginScreen').classList.remove('active');
+  document.getElementById('dashboardScreen').classList.add('active');
+  document.getElementById('userGreeting').textContent = `Welcome, ${currentUser}!`;
 }
 
 // ============================================
-// ACTIVITY SUBMISSION
+// SOUMETTRE UNE ACTIVITÉ
 // ============================================
 
 async function submitActivity(activityNumber) {
-  if (!appState.currentUser) {
+  if (!currentUser) {
     alert('Please login first');
     return;
   }
 
-  const codeTextarea = document.getElementById(`code${activityNumber}`);
-  const code = codeTextarea.value.trim();
+  const code = document.getElementById(`code${activityNumber}`).value.trim();
   const feedbackDiv = document.getElementById(`feedback${activityNumber}`);
 
-  // Clear feedback
-  feedbackDiv.classList.remove('success', 'error');
-  feedbackDiv.textContent = '';
-
-  // Validate input
   if (!code) {
-    showFeedback(feedbackDiv, 'Code cannot be empty', 'error');
+    showFeedback(feedbackDiv, '❌ Code cannot be empty', 'error');
     return;
   }
-
-  if (code.length > 50000) {
-    showFeedback(feedbackDiv, 'Code is too large (max 50KB)', 'error');
-    return;
-  }
-
-  // Disable submit button
-  const submitBtn = event.target;
-  const originalText = submitBtn.textContent;
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Submitting...';
 
   try {
-    const response = await fetch('/api/submit', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        fullName: appState.currentUser,
-        activityNumber: activityNumber,
-        code: code
-      })
-    });
+    // Insérer ou mettre à jour dans Supabase
+    const { data, error } = await supabase
+      .from('submissions')
+      .upsert({
+        full_name: currentUser,
+        activity_number: activityNumber,
+        code_text: code
+      }, { onConflict: 'full_name,activity_number' });
 
-    const data = await response.json();
-
-    if (data.success) {
-      showFeedback(feedbackDiv, '✓ Submitted successfully!', 'success');
-
-      // Update local submission cache
-      if (!appState.submissions[activityNumber]) {
-        appState.submissions[activityNumber] = {};
-      }
-      appState.submissions[activityNumber].code = code;
-      appState.submissions[activityNumber].timestamp = new Date().toISOString();
-    } else {
-      showFeedback(feedbackDiv, data.message || 'Submission failed', 'error');
+    if (error) {
+      showFeedback(feedbackDiv, '❌ ' + error.message, 'error');
+      return;
     }
+
+    showFeedback(feedbackDiv, '✅ Submitted successfully!', 'success');
+
   } catch (err) {
     console.error('Submit error:', err);
-    showFeedback(feedbackDiv, 'Network error. Please try again.', 'error');
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = originalText;
+    showFeedback(feedbackDiv, '❌ Error submitting. Try again.', 'error');
   }
 }
 
 // ============================================
-// LOAD USER SUBMISSIONS
+// CHARGER LES SOUMISSIONS DE L'UTILISATEUR
 // ============================================
 
 async function loadUserSubmissions() {
-  if (!appState.currentUser) return;
+  if (!currentUser) return;
 
   try {
-    const response = await fetch(`/api/submissions/${encodeURIComponent(appState.currentUser)}`);
-    const data = await response.json();
+    const { data, error } = await supabase
+      .from('submissions')
+      .select('*')
+      .eq('full_name', currentUser);
 
-    if (data.success && data.submissions) {
-      // Load submissions into form
-      data.submissions.forEach(submission => {
-        const actNum = submission.activity_number;
-        const codeTextarea = document.getElementById(`code${actNum}`);
-        if (codeTextarea) {
-          codeTextarea.value = submission.code_text;
+    if (error) {
+      console.error('Load error:', error);
+      return;
+    }
+
+    // Afficher les soumissions sauvegardées
+    if (data) {
+      data.forEach(submission => {
+        const textarea = document.getElementById(`code${submission.activity_number}`);
+        if (textarea) {
+          textarea.value = submission.code_text;
         }
       });
-
-      // Store in app state
-      appState.submissions = {};
-      data.submissions.forEach(sub => {
-        appState.submissions[sub.activity_number] = {
-          code: sub.code_text,
-          timestamp: sub.timestamp
-        };
-      });
     }
+
   } catch (err) {
     console.error('Load submissions error:', err);
   }
 }
 
 // ============================================
-// HELPER FUNCTIONS
+// HELPERS
 // ============================================
-
-function showError(message, element) {
-  element.textContent = message;
-  element.classList.add('show');
-}
 
 function showFeedback(element, message, type) {
   element.textContent = message;
-  element.classList.add(type);
+  element.className = `submission-feedback ${type}`;
 
-  // Auto-hide success message after 3 seconds
   if (type === 'success') {
     setTimeout(() => {
-      element.classList.remove(type);
       element.textContent = '';
+      element.className = 'submission-feedback';
     }, 3000);
   }
 }
-
-// Keyboard shortcut to submit (Ctrl+Enter in any textarea)
-document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-    const activeElement = document.activeElement;
-    if (activeElement && activeElement.classList.contains('code-textarea')) {
-      const activityNum = activeElement.id.replace('code', '');
-      submitActivity(parseInt(activityNum));
-    }
-  }
-});
