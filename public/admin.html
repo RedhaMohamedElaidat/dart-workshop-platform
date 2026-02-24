@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Panel - Dart Workshop</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="admin-container">
+    <!-- Header -->
+    <div class="admin-header">
+      <div class="header-content">
+        <h1>📊 Admin Panel - Submissions</h1>
+        <p class="subtitle">View all activity submissions from participants</p>
+      </div>
+      <button id="backBtn" class="btn btn-secondary">← Back to Home</button>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="admin-filters">
+      <div class="filter-group">
+        <label for="filterStudent">Filter by Student:</label>
+        <select id="filterStudent" onchange="filterSubmissions()">
+          <option value="">All Students</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filterActivity">Filter by Activity:</label>
+        <select id="filterActivity" onchange="filterSubmissions()">
+          <option value="">All Activities</option>
+          <option value="1">Activity 1</option>
+          <option value="2">Activity 2</option>
+          <option value="3">Activity 3</option>
+        </select>
+      </div>
+      <button id="exportBtn" class="btn btn-secondary">📥 Export to CSV</button>
+    </div>
+
+    <!-- Submissions Table -->
+    <div class="admin-table-wrapper">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Student Name</th>
+            <th>Activity #</th>
+            <th>Submission Date</th>
+            <th>Code Preview</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="submissionsTable">
+          <tr>
+            <td colspan="5" class="text-center loading">Loading submissions...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Code Viewer Modal -->
+    <div id="codeModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modalTitle">Code Submission</h2>
+          <button class="modal-close" onclick="closeCodeModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <pre id="codeContent" class="code-block"></pre>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeCodeModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="admin.js"></script>
+</body>
+</html>
